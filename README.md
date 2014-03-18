@@ -99,3 +99,20 @@ Params:
 
 Response:
 
+GET /status
+-----------
+
+Returns info about our connection to the given URL (most important is when we
+last heard from the given Redis server).
+
+Params:
+
+* url
+
+Response:
+
+    {
+      url: "redis://localhost:6379",
+      last_activity: 1395174780,
+    }
+
