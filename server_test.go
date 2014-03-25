@@ -16,7 +16,7 @@ func TestServer(t *testing.T) {
 	defer s.Term()
 
 	server := NewServerConn(url.URL{Host: "0.0.0.0:11042"}, time.Millisecond)
-	_, err = server.Run(resp.NewCommandStrings("PING"))
+	_, err = server.Run(resp.NewCommand("PING"))
 	if err != nil {
 		t.Fatal(err)
 	}

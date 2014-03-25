@@ -3,6 +3,7 @@ package aorta
 import (
 	"bufio"
 	"github.com/stvp/resp"
+	"io"
 	"net"
 	"net/url"
 	"sync"
@@ -53,8 +54,6 @@ func (s *ServerConn) updateConnDeadline() {
 }
 
 func (s *ServerConn) dial() error {
-	var err error
-
 	if s.conn != nil {
 		s.close()
 	}
@@ -62,12 +61,13 @@ func (s *ServerConn) dial() error {
 	conn, err := net.DialTimeout("tcp", s.host, s.timeout)
 	if err == nil {
 		s.conn = conn
+		// TODO make configurable buffer sizes
 		s.bw = bufio.NewWriterSize(s.conn, 8192)
 		s.br = resp.NewReaderSize(s.conn, 8192)
 	}
 
 	if len(s.auth) > 0 {
-		_, err = resp.Parse(s.Run(resp.NewCommandStrings("AUTH", s.auth)))
+		_, err = resp.Parse(s.Run(resp.NewCommand("AUTH", s.auth)))
 		if err != nil {
 			s.close()
 			return err
@@ -91,11 +91,19 @@ func (s *ServerConn) run(command resp.Command) (response []byte, err error) {
 		err = s.bw.Flush()
 	}
 	if err != nil {
-		return nil, err
+		return nil, s.handleError(err)
 	}
 
 	s.updateConnDeadline()
-	return s.br.ReadObjectBytes()
+	response, err = s.br.ReadObjectBytes()
+	return response, s.handleError(err)
+}
+
+func (s *ServerConn) handleError(err error) error {
+	if err == io.EOF {
+		s.close()
+	}
+	return err
 }
 
 func (s *ServerConn) close() (err error) {
