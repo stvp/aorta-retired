@@ -3,33 +3,25 @@ package aorta
 import (
 	"bufio"
 	"github.com/stvp/resp"
-	"io"
 	"net"
 	"net/url"
-	"sync"
 	"time"
 )
 
 type ServerConn struct {
-	// Read and write timeout
-	timeout time.Duration
-
-	// Redis connection
+	// Redis server connection settings
 	host string
 	auth string
-	conn net.Conn
 
-	// Redis I/O buffers
-	bw *bufio.Writer
-	br *resp.Reader
-
-	sync.Mutex
+	RESPConn
 }
 
 func NewServerConn(redisUrl url.URL, timeout time.Duration) *ServerConn {
 	server := &ServerConn{
-		host:    redisUrl.Host,
-		timeout: timeout,
+		host: redisUrl.Host,
+		RESPConn: RESPConn{
+			timeout: timeout,
+		},
 	}
 	if redisUrl.User != nil {
 		server.auth, _ = redisUrl.User.Password()
@@ -41,16 +33,6 @@ func (s *ServerConn) Run(command resp.Command) ([]byte, error) {
 	s.Lock()
 	defer s.Unlock()
 	return s.run(command)
-}
-
-func (s *ServerConn) Close() error {
-	s.Lock()
-	defer s.Unlock()
-	return s.close()
-}
-
-func (s *ServerConn) updateConnDeadline() {
-	s.conn.SetDeadline(time.Now().Add(s.timeout))
 }
 
 func (s *ServerConn) dial() error {
@@ -97,22 +79,4 @@ func (s *ServerConn) run(command resp.Command) (response []byte, err error) {
 	s.updateConnDeadline()
 	response, err = s.br.ReadObjectBytes()
 	return response, s.handleError(err)
-}
-
-func (s *ServerConn) handleError(err error) error {
-	if err == io.EOF {
-		s.close()
-	}
-	return err
-}
-
-func (s *ServerConn) close() (err error) {
-	if s.conn != nil {
-		err = s.conn.Close()
-		s.conn = nil
-		s.bw = nil
-		s.br = nil
-	}
-
-	return err
 }
