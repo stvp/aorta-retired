@@ -1,9 +1,7 @@
 package aorta
 
 import (
-	"bufio"
 	"github.com/stvp/resp"
-	"io"
 	"net"
 	"sync"
 	"time"
@@ -16,9 +14,8 @@ type RESPConn struct {
 	// TCP connection
 	conn net.Conn
 
-	// RESP I/O buffers
-	bw *bufio.Writer
-	br *resp.Reader
+	// RESP reader
+	reader *resp.Reader
 
 	sync.Mutex
 }
@@ -29,39 +26,36 @@ func (c *RESPConn) Close() error {
 	return c.close()
 }
 
-func (c *RESPConn) sendObject(raw []byte) (err error) {
-	c.updateConnDeadline()
-	_, err = c.bw.Write(raw)
-	if err == nil {
-		err = c.bw.Flush()
-	}
-	return c.handleError(err)
-}
-
-func (c *RESPConn) receiveObject() (raw []byte, err error) {
-	c.updateConnDeadline()
-	raw, err = c.br.ReadObjectBytes()
-	return raw, c.handleError(err)
-}
-
-func (c *RESPConn) updateConnDeadline() {
+func (c *RESPConn) write(raw []byte) error {
 	c.conn.SetDeadline(time.Now().Add(c.timeout))
-}
 
-func (c *RESPConn) handleError(err error) error {
-	if err == io.EOF {
+	_, err := c.conn.Write(raw)
+	err = wrapErr(err)
+	if err == ErrConnClosed {
 		c.close()
 	}
+
 	return err
+}
+
+func (c *RESPConn) readObject() (object interface{}, err error) {
+	c.conn.SetDeadline(time.Now().Add(c.timeout))
+
+	object, err = resp.Parse(c.reader.ReadObjectBytes())
+	err = wrapErr(err)
+	if err == ErrConnClosed {
+		c.close()
+	}
+
+	return object, err
 }
 
 func (c *RESPConn) close() (err error) {
 	if c.conn != nil {
 		err = c.conn.Close()
 		c.conn = nil
-		c.bw = nil
-		c.br = nil
+		c.reader = nil
 	}
 
-	return err
+	return wrapErr(err)
 }
