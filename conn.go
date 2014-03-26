@@ -35,7 +35,7 @@ func (c *RESPConn) sendObject(raw []byte) (err error) {
 	if err == nil {
 		err = c.bw.Flush()
 	}
-	return err
+	return c.handleError(err)
 }
 
 func (c *RESPConn) receiveObject() (raw []byte, err error) {

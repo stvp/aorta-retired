@@ -56,8 +56,7 @@ func (s *ServerConn) dial() error {
 	if len(s.auth) > 0 {
 		_, err = resp.Parse(s.run(resp.NewCommand("AUTH", s.auth)))
 		if err != nil {
-			s.close()
-			return err
+			return s.handleError(err)
 		}
 	}
 

@@ -70,6 +70,9 @@ func TestServerRun(t *testing.T) {
 		}
 	})
 
+	// Handles bad auth
+	// TODO
+
 	// Handles auth timeouts
 	tempTimeoutServer(func(err error) {
 		if err != nil {
@@ -80,6 +83,9 @@ func TestServerRun(t *testing.T) {
 		_, err = server.Run(resp.NewCommand("PING"))
 		if err == nil {
 			t.Error("expected error but got none")
+		}
+		if server.conn != nil {
+			t.Error("server connection should have been closed, but wasn't")
 		}
 	})
 
@@ -95,13 +101,15 @@ func TestServerRun(t *testing.T) {
 			t.Errorf("failed to connect to temp server")
 		}
 
-		// Pause the server
 		slow := NewServerConn(goodAuthUrl, time.Second)
 		slow.sendCommand(resp.NewCommand("DEBUG", "SLEEP", "1"))
 
 		_, err = server.Run(resp.NewCommand("PING"))
 		if err == nil {
 			t.Error("expected error but got none")
+		}
+		if server.conn != nil {
+			t.Error("server connection should have been closed, but wasn't")
 		}
 	})
 }
