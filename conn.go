@@ -29,6 +29,21 @@ func (c *RESPConn) Close() error {
 	return c.close()
 }
 
+func (c *RESPConn) sendObject(raw []byte) (err error) {
+	c.updateConnDeadline()
+	_, err = c.bw.Write(raw)
+	if err == nil {
+		err = c.bw.Flush()
+	}
+	return err
+}
+
+func (c *RESPConn) receiveObject() (raw []byte, err error) {
+	c.updateConnDeadline()
+	raw, err = c.br.ReadObjectBytes()
+	return raw, c.handleError(err)
+}
+
 func (c *RESPConn) updateConnDeadline() {
 	c.conn.SetDeadline(time.Now().Add(c.timeout))
 }

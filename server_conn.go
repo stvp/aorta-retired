@@ -2,10 +2,15 @@ package aorta
 
 import (
 	"bufio"
+	"errors"
 	"github.com/stvp/resp"
 	"net"
 	"net/url"
 	"time"
+)
+
+var (
+	ErrReadClosedConn = errors.New("aorta: can't read from closed connection")
 )
 
 type ServerConn struct {
@@ -60,23 +65,29 @@ func (s *ServerConn) dial() error {
 }
 
 func (s *ServerConn) run(command resp.Command) (response []byte, err error) {
-	if s.conn == nil {
-		err = s.dial()
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	s.updateConnDeadline()
-	_, err = s.bw.Write(command)
-	if err == nil {
-		err = s.bw.Flush()
-	}
+	err = s.sendCommand(command)
 	if err != nil {
-		return nil, s.handleError(err)
+		return []byte{}, err
 	}
 
 	s.updateConnDeadline()
 	response, err = s.br.ReadObjectBytes()
 	return response, s.handleError(err)
+}
+
+func (s *ServerConn) sendCommand(command resp.Command) (err error) {
+	if s.conn == nil {
+		err = s.dial()
+		if err != nil {
+			return err
+		}
+	}
+	return s.sendObject(command)
+}
+
+func (s *ServerConn) receiveResponse() (response []byte, err error) {
+	if s.conn == nil {
+		return []byte{}, ErrReadClosedConn
+	}
+	return s.receiveObject()
 }
