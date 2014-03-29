@@ -1,62 +1,53 @@
-package aorta
+package main
 
 import (
 	"github.com/stvp/resp"
 	"github.com/stvp/tempredis"
-	"net/url"
 	"reflect"
 	"testing"
 	"time"
 )
 
 var (
-	pongReply = resp.String("+PONG\r\n")
+	pongReply = []byte("+PONG\r\n")
 
 	goodConfig = tempredis.Config{
-		"port": "22000",
-	}
-	goodUrl = url.URL{
-		Host: goodConfig.Address(),
-	}
-
-	goodAuthConfig = tempredis.Config{
-		"port":        "22001",
+		"port":        "22000",
 		"requirepass": "pw",
 	}
-	goodAuthUrl = url.URL{
-		Host: goodAuthConfig.Address(),
-		User: url.UserPassword("", goodAuthConfig["requirepass"]),
-	}
-	badAuthUrl = url.URL{
-		Host: goodAuthConfig.Address(),
-		User: url.UserPassword("", "oops"),
+	goodHost = goodConfig.Bind()
+	goodPort = goodConfig.Port()
+	goodAuth = "pw"
+
+	goodConfigNoAuth = tempredis.Config{
+		"port": "22000",
 	}
 )
 
 // -- Helpers
 
-func tempTimeoutServer(fn func(redisUrl url.URL, err error)) {
-	server, err := tempredis.Start(goodAuthConfig)
+func tempTimeoutServer(fn func(host, port, auth string, err error)) {
+	server, err := tempredis.Start(goodConfig)
 	defer server.Kill()
 	if err == nil {
 		// Block the server
-		conn := NewServerConn(goodAuthUrl, time.Minute)
+		conn := NewServerConn(goodHost, goodPort, goodAuth, time.Minute)
 		conn.dial()
 		conn.write(resp.NewCommand("DEBUG", "SLEEP", "60"))
 	}
 
-	fn(goodAuthUrl, err)
+	fn(goodHost, goodPort, goodAuth, err)
 }
 
 // -- Tests
 
 func TestServerDo_NoAuth(t *testing.T) {
-	tempredis.Temp(goodConfig, func(err error) {
+	tempredis.Temp(goodConfigNoAuth, func(err error) {
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		conn := NewServerConn(goodUrl, time.Millisecond)
+		conn := NewServerConn(goodHost, goodPort, "", time.Millisecond)
 		response, err := conn.Do(resp.NewCommand("PING"))
 		if err != nil {
 			t.Fatal(err)
@@ -68,12 +59,12 @@ func TestServerDo_NoAuth(t *testing.T) {
 }
 
 func TestServerDo_Auth(t *testing.T) {
-	tempredis.Temp(goodAuthConfig, func(err error) {
+	tempredis.Temp(goodConfig, func(err error) {
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		conn := NewServerConn(goodAuthUrl, time.Millisecond)
+		conn := NewServerConn(goodHost, goodPort, goodAuth, time.Millisecond)
 		response, err := conn.Do(resp.NewCommand("PING"))
 		if err != nil {
 			t.Fatal(err)
@@ -85,26 +76,35 @@ func TestServerDo_Auth(t *testing.T) {
 }
 
 func TestServerDo_BadAuth(t *testing.T) {
-	tempredis.Temp(goodAuthConfig, func(err error) {
+	tempredis.Temp(goodConfig, func(err error) {
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		conn := NewServerConn(badAuthUrl, time.Millisecond)
-		_, err = conn.Do(resp.NewCommand("PING"))
-		if _, ok := err.(resp.Error); !ok {
-			t.Errorf("expected a resp.Error but got %#v", err)
+		conn := NewServerConn(goodHost, goodPort, "bad", time.Millisecond)
+		response, err := conn.Do(resp.NewCommand("PING"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		e, err := resp.Parse(response)
+		if err != nil {
+			t.Fatal(err)
+		}
+		switch e.(type) {
+		case resp.Error:
+		default:
+			t.Errorf("expected an error response but got: %s", response)
 		}
 	})
 }
 
 func TestServerDo_AuthTimeout(t *testing.T) {
-	tempTimeoutServer(func(redisUrl url.URL, err error) {
+	tempTimeoutServer(func(host, port, auth string, err error) {
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		conn := NewServerConn(redisUrl, time.Millisecond)
+		conn := NewServerConn(host, port, auth, time.Millisecond)
 		_, err = conn.Do(resp.NewCommand("PING"))
 		if err != ErrTimeout {
 			t.Errorf("expected ErrTimeout but got %#v", err)
@@ -113,18 +113,18 @@ func TestServerDo_AuthTimeout(t *testing.T) {
 }
 
 func TestServerDo_ReadTimeout(t *testing.T) {
-	tempredis.Temp(goodAuthConfig, func(err error) {
+	tempredis.Temp(goodConfig, func(err error) {
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		conn := NewServerConn(goodAuthUrl, time.Millisecond)
+		conn := NewServerConn(goodHost, goodPort, goodAuth, time.Millisecond)
 		_, err = conn.dial()
 		if err != nil {
 			t.Errorf("failed to connect to temp server")
 		}
 
-		slowConn := NewServerConn(goodAuthUrl, time.Second)
+		slowConn := NewServerConn(goodHost, goodPort, goodAuth, time.Second)
 		slowConn.dial()
 		slowConn.write(resp.NewCommand("DEBUG", "SLEEP", "1"))
 
@@ -136,12 +136,12 @@ func TestServerDo_ReadTimeout(t *testing.T) {
 }
 
 func TestServerDo_ConnectionDrop(t *testing.T) {
-	server, err := tempredis.Start(goodAuthConfig)
+	server, err := tempredis.Start(goodConfig)
 	if err != nil {
 		server.Term()
 		t.Fatal(err)
 	}
-	conn := NewServerConn(goodAuthUrl, time.Millisecond)
+	conn := NewServerConn(goodHost, goodPort, goodAuth, time.Millisecond)
 	_, err = conn.Do(resp.NewCommand("PING"))
 	if err != nil {
 		server.Term()
@@ -156,7 +156,7 @@ func TestServerDo_ConnectionDrop(t *testing.T) {
 	}
 
 	// Server comes back
-	server, err = tempredis.Start(goodAuthConfig)
+	server, err = tempredis.Start(goodConfig)
 	defer server.Term()
 	if err != nil {
 		t.Fatal(err)

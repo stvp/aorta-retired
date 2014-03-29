@@ -1,4 +1,4 @@
-package aorta
+package main
 
 import (
 	"fmt"

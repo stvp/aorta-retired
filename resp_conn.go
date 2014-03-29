@@ -1,4 +1,4 @@
-package aorta
+package main
 
 import (
 	"github.com/stvp/resp"
@@ -38,16 +38,15 @@ func (c *RESPConn) write(raw []byte) error {
 	return err
 }
 
-func (c *RESPConn) readObject() (object interface{}, err error) {
+func (c *RESPConn) readObjectBytes() (bytes []byte, err error) {
 	c.conn.SetDeadline(time.Now().Add(c.timeout))
 
-	object, err = resp.Parse(c.reader.ReadObjectBytes())
+	bytes, err = c.reader.ReadObjectBytes()
 	err = wrapErr(err)
 	if err == ErrConnClosed {
 		c.close()
 	}
-
-	return object, err
+	return bytes, err
 }
 
 func (c *RESPConn) close() (err error) {
