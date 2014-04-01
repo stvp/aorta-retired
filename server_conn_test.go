@@ -162,7 +162,7 @@ func TestServerDo_ConnectionDrop(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Should re-connect automaticaly
+	// Should re-connect automatically
 	response, err := conn.Do(resp.NewCommand("PING"))
 	if err != nil {
 		t.Errorf("%#v\n", err)
