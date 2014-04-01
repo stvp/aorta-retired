@@ -26,8 +26,11 @@ func (c *RESPConn) Close() error {
 // write writes the given bytes to the TCP connection, returning any errors
 // encountered.
 func (c *RESPConn) write(raw []byte) error {
-	c.conn.SetDeadline(time.Now().Add(c.timeout))
+	if c.conn == nil {
+		return ErrConnClosed
+	}
 
+	c.conn.SetDeadline(time.Now().Add(c.timeout))
 	_, err := c.conn.Write(raw)
 	err = wrapErr(err)
 	if err == ErrConnClosed {
@@ -41,8 +44,11 @@ func (c *RESPConn) write(raw []byte) error {
 // connection error is encountered while reading (closed connection, timeout,
 // etc.), the connection is closed and the error returned.
 func (c *RESPConn) readObjectBytes() (bytes []byte, err error) {
-	c.conn.SetDeadline(time.Now().Add(c.timeout))
+	if c.conn == nil {
+		return nil, ErrConnClosed
+	}
 
+	c.conn.SetDeadline(time.Now().Add(c.timeout))
 	bytes, err = c.reader.ReadObjectBytes()
 	err = wrapErr(err)
 	if err == ErrConnClosed {
