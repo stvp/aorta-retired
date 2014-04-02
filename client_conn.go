@@ -32,14 +32,17 @@ func (c *ClientConn) ReadCommand() (resp.Command, error) {
 	c.Lock()
 	defer c.Unlock()
 
-	bytes, err := c.readObjectBytes()
+	response, err := c.readObject()
 	if err != nil {
 		return nil, err
 	}
 
-	// TODO we should do a bit more to make sure we actually received an array of
-	// bulk strings instead of just any ol' RESP object.
-	return resp.Command(bytes), nil
+	switch obj := response.(type) {
+	case resp.Array:
+		return resp.Command(obj), nil
+	default:
+		return nil, ErrInvalidCommandFormat
+	}
 }
 
 // Write sends the given bytes to the Redis client. If a connection error is

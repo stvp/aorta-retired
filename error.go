@@ -7,8 +7,9 @@ import (
 )
 
 var (
-	ErrConnClosed = errors.New("aorta: connection closed")
-	ErrTimeout    = errors.New("aorta: timeout")
+	ErrConnClosed           = errors.New("aorta: connection closed")
+	ErrTimeout              = errors.New("aorta: timeout")
+	ErrInvalidCommandFormat = errors.New("aorta: invalid command format")
 )
 
 func wrapErr(err error) error {

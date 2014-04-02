@@ -7,7 +7,8 @@ import (
 	"time"
 )
 
-// A RESPConn is a TCP connection to a Redis server or client.
+// A RESPConn is a TCP connection to a Redis server or client with methods for
+// reading and writing RESP.
 type RESPConn struct {
 	timeout time.Duration
 	conn    net.Conn
@@ -40,21 +41,18 @@ func (c *RESPConn) write(raw []byte) error {
 	return err
 }
 
-// readObjectBytes reads one entire RESP object from the TCP connection. If a
-// connection error is encountered while reading (closed connection, timeout,
-// etc.), the connection is closed and the error returned.
-func (c *RESPConn) readObjectBytes() (bytes []byte, err error) {
+func (c *RESPConn) readObject() (response interface{}, err error) {
 	if c.conn == nil {
 		return nil, ErrConnClosed
 	}
 
 	c.conn.SetDeadline(time.Now().Add(c.timeout))
-	bytes, err = c.reader.ReadObjectBytes()
+	response, err = c.reader.ReadObject()
 	err = wrapErr(err)
 	if err == ErrConnClosed {
 		c.close()
 	}
-	return bytes, err
+	return response, err
 }
 
 func (c *RESPConn) close() (err error) {

@@ -123,17 +123,17 @@ func (s *ProxyServer) handle(conn net.Conn) {
 		case "QUIT":
 			return
 		default:
-			response, err := server.Do(command)
-			if err != nil {
-				// TODO figure out what errors we might see here
-				client.WriteError(err.Error())
-				continue
-			}
+			// response, err := server.Do(command)
+			// if err != nil {
+			// // TODO figure out what errors we might see here
+			// client.WriteError(err.Error())
+			// continue
+			// }
 
-			err = client.Write(response)
-			if err != nil {
-				return
-			}
+			// err = client.Write(response)
+			// if err != nil {
+			// return
+			// }
 		}
 	}
 }

@@ -9,8 +9,6 @@ import (
 )
 
 var (
-	pongReply = []byte("+PONG\r\n")
-
 	goodConfig = tempredis.Config{
 		"port":        "22000",
 		"requirepass": "pw",
@@ -47,13 +45,21 @@ func TestServerDo_NoAuth(t *testing.T) {
 			t.Fatal(err)
 		}
 
+		// Without password
 		conn := NewServerConn(goodHost, goodPort, "", time.Millisecond)
 		response, err := conn.Do(resp.NewCommand("PING"))
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !reflect.DeepEqual(pongReply, response) {
-			t.Errorf("expected: %#v\ngot: %#v", pongReply, response)
+		if !reflect.DeepEqual(resp.PONG, response) {
+			t.Errorf("expected: %#v\ngot: %#v", resp.PONG, response)
+		}
+
+		// With password
+		conn = NewServerConn(goodHost, goodPort, "x", time.Millisecond)
+		response, err = conn.Do(resp.NewCommand("PING"))
+		if _, ok := err.(resp.Error); !ok {
+			t.Errorf("expected resp.Error, got: %#v", err)
 		}
 	})
 }
@@ -69,8 +75,8 @@ func TestServerDo_Auth(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !reflect.DeepEqual(pongReply, response) {
-			t.Errorf("expected: %#v\ngot: %#v", pongReply, response)
+		if !reflect.DeepEqual(resp.PONG, response) {
+			t.Errorf("expected: %#v\ngot: %#v", resp.PONG, response)
 		}
 	})
 }
@@ -82,18 +88,9 @@ func TestServerDo_BadAuth(t *testing.T) {
 		}
 
 		conn := NewServerConn(goodHost, goodPort, "bad", time.Millisecond)
-		response, err := conn.Do(resp.NewCommand("PING"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		e, err := resp.Parse(response)
-		if err != nil {
-			t.Fatal(err)
-		}
-		switch e.(type) {
-		case resp.Error:
-		default:
-			t.Errorf("expected an error response but got: %s", response)
+		_, err = conn.Do(resp.NewCommand("PING"))
+		if _, ok := err.(resp.Error); !ok {
+			t.Errorf("expected resp.Error as error, got: %#v", err)
 		}
 	})
 }
@@ -119,7 +116,7 @@ func TestServerDo_ReadTimeout(t *testing.T) {
 		}
 
 		conn := NewServerConn(goodHost, goodPort, goodAuth, time.Millisecond)
-		_, err = conn.dial()
+		err = conn.dial()
 		if err != nil {
 			t.Errorf("failed to connect to temp server")
 		}
@@ -167,7 +164,7 @@ func TestServerDo_ConnectionDrop(t *testing.T) {
 	if err != nil {
 		t.Errorf("%#v\n", err)
 	}
-	if !reflect.DeepEqual(pongReply, response) {
-		t.Errorf("expected: %#v\ngot: %#v", pongReply, response)
+	if !reflect.DeepEqual(resp.PONG, response) {
+		t.Errorf("expected: %#v\ngot: %#v", resp.PONG, response)
 	}
 }
