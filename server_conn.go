@@ -13,6 +13,7 @@ type ServerConn struct {
 	RESPConn
 }
 
+// TODO just take an address
 func NewServerConn(host, port, auth string, timeout time.Duration) *ServerConn {
 	server := &ServerConn{
 		host: fmt.Sprintf("%s:%s", host, port),

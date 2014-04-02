@@ -8,16 +8,15 @@ import (
 	"time"
 )
 
-var ()
-
 type ProxyServer struct {
 	// Settings
 	password      string
 	clientTimeout time.Duration
 	serverTimeout time.Duration
 
-	bind string
-	pool *ServerConnPool
+	bind     string
+	listener net.Listener
+	pool     *ServerConnPool
 	// cache *Cache
 }
 
@@ -31,23 +30,32 @@ func NewProxyServer(bind, password string, clientTimeout, serverTimeout time.Dur
 	}
 }
 
-// TODO trap TERM and give goroutines a second or two to finish up
-func (s *ProxyServer) Run() error {
+func (s *ProxyServer) Listen() error {
 	listener, err := net.Listen("tcp", s.bind)
 	if err != nil {
 		return err
 	}
-	defer listener.Close()
+	s.listener = listener
 
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			return err
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				// TODO surface error to logger or something. Also, closing the
+				// listener returns an error here, so we should ignore that.
+				return
+			}
+			go s.handle(conn)
 		}
-		go s.handle(conn)
-	}
+	}()
 
 	return nil
+}
+
+func (s *ProxyServer) Close() {
+	if s.listener != nil {
+		s.listener.Close()
+	}
 }
 
 func (s *ProxyServer) handle(conn net.Conn) {
@@ -90,6 +98,8 @@ func (s *ProxyServer) handle(conn net.Conn) {
 			continue
 		}
 		if !authenticated {
+			// Redis returns the period even though thats inconsistent with all other
+			// error messages. We include it here for correctness.
 			client.WriteError("NOAUTH Authentication required.")
 			return
 		}
@@ -98,13 +108,16 @@ func (s *ProxyServer) handle(conn net.Conn) {
 		if commandName == "PROXY" {
 			if len(args) != 4 {
 				client.WriteError("ERR wrong number of arguments for 'proxy' command")
+				continue
 			}
 			server = s.pool.Get(args[1], args[2], args[3])
 			client.Write(resp.OK)
 			continue
 		}
+
 		if server == nil {
 			client.WriteError("aorta: proxy destination not set")
+			continue
 		}
 
 		// Handle the command
@@ -123,17 +136,21 @@ func (s *ProxyServer) handle(conn net.Conn) {
 		case "QUIT":
 			return
 		default:
-			// response, err := server.Do(command)
-			// if err != nil {
-			// // TODO figure out what errors we might see here
-			// client.WriteError(err.Error())
-			// continue
-			// }
+			response, err := server.Do(command)
+			if err != nil {
+				switch e := err.(type) {
+				case resp.Error:
+					client.Write(e)
+				default:
+					client.WriteError(err.Error())
+				}
+				continue
+			}
 
-			// err = client.Write(response)
-			// if err != nil {
-			// return
-			// }
+			err = client.Write(response.([]byte))
+			if err != nil {
+				return
+			}
 		}
 	}
 }

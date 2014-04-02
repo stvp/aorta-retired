@@ -19,6 +19,8 @@ func wrapErr(err error) error {
 		return ErrConnClosed
 	} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 		return ErrTimeout
+	} else if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
+		return ErrTimeout
 	} else {
 		return err
 	}
