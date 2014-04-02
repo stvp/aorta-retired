@@ -49,15 +49,10 @@ func (s *ServerConn) dial() (err error) {
 	s.conn = conn
 	s.reader = resp.NewReaderSize(s.conn, 8192)
 	if len(s.auth) > 0 {
-		response, err := s.do(resp.NewCommand("AUTH", s.auth))
+		_, err = s.do(resp.NewCommand("AUTH", s.auth))
 		if err != nil {
 			s.close()
 			return err
-		}
-		switch obj := response.(type) {
-		case resp.Error:
-			s.close()
-			return obj
 		}
 	}
 
