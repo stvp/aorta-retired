@@ -61,8 +61,10 @@ func (s *ProxyServer) Close() {
 func (s *ProxyServer) handle(conn net.Conn) {
 	client := NewClientConn(conn, s.clientTimeout)
 	defer client.Close()
-	var server *ServerConn
+
+	// State
 	var authenticated bool
+	var server *ServerConn
 
 	for {
 		// Read command
@@ -81,6 +83,7 @@ func (s *ProxyServer) handle(conn net.Conn) {
 		args, err := command.Strings()
 		if err != nil {
 			client.WriteError("ERR syntax error")
+			return
 		}
 		commandName := strings.ToUpper(args[0])
 
@@ -141,12 +144,7 @@ func (s *ProxyServer) handle(conn net.Conn) {
 		default:
 			response, err := server.Do(command)
 			if err != nil {
-				switch e := err.(type) {
-				case resp.Error:
-					client.Write(e)
-				default:
-					client.WriteError(err.Error())
-				}
+				client.WriteError(err.Error())
 				continue
 			}
 

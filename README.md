@@ -17,3 +17,9 @@ Proxy all following commands to the given Redis server.
 Return cached results for the given command. If the cache is older than
 `seconds`, fresh results will be fetched, cached, and returned.
 
+Not Supported
+-------------
+
+* Pipelining
+* Scripting (Well, it's not tested)
+

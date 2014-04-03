@@ -108,6 +108,15 @@ func TestProxyServer_Auth(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		// ... then bad auth again
+		_, err = conn.Do("AUTH", "x")
+		if err == nil || err.Error() != "ERR invalid password" {
+			t.Fatalf("expected auth error, got: %#v", err)
+		}
+		_, err = conn.Do("PROXY", "0.0.0.0", "9999", "pw")
+		if err == nil || err.Error() != "NOAUTH Authentication required." {
+			t.Fatalf("expected auth error, got: %#v", err)
+		}
 	})
 }
 
@@ -155,6 +164,7 @@ func TestProxyServer_BadProxy(t *testing.T) {
 			t.Fatalf("Expected OK, got: %#v", response)
 		}
 		response, err = redis.String(conn.Do("PING"))
+		// TODO this is super brittle -- need a better way to test this
 		if err == nil || err.Error() != "dial tcp: lookup invalid: no such host" {
 			t.Fatalf("expected dial error, got: %#v", err)
 		}
@@ -218,11 +228,77 @@ func TestProxyServer_ClientQuit(t *testing.T) {
 	})
 }
 
-// TODO
-// * tests for servers with no auth
-//   * auth provided (error)
-//   * good (no auth)
-// * pipelining
-// * scripting?
-// * proxy to one server and then switch to another
-// * proxy to one server and then run an invalid proxy call -- should refuse
+func TestProxyServer_SwitchServer(t *testing.T) {
+	withProxyAndServers(2, func(proxy *ProxyServer, servers []*tempredis.Server) {
+		conn := dialProxy(proxy)
+		conn.Do("AUTH", "pw")
+		conn.Do("PROXY", servers[0].Config.Bind(), servers[0].Config.Port(), servers[0].Config.Password())
+		conn.Do("SET", "foo", "bar")
+		foo, err := redis.String(conn.Do("GET", "foo"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if foo != "bar" {
+			t.Fatalf("expected \"bar\", got: %#v", foo)
+		}
+
+		// Switch to good address
+		conn.Do("PROXY", servers[1].Config.Bind(), servers[1].Config.Port(), servers[1].Config.Password())
+		_, err = redis.String(conn.Do("GET", "foo"))
+		if err == nil || err.Error() != "redigo: nil returned" {
+			t.Fatalf("should be connected to servers[1], got: %#v", err)
+		}
+
+		// Switch to bad address
+		conn.Do("PROXY", servers[1].Config.Bind(), "9999", servers[1].Config.Password())
+		_, err = redis.String(conn.Do("GET", "foo"))
+		if err == nil || err.Error() != "dial tcp 0.0.0.0:9999: connection refused" {
+			t.Fatalf("expected connection error but got: %#v", err)
+		}
+		if !redisConnClosed(conn) {
+			t.Error("client connection is still open")
+		}
+	})
+}
+
+func BenchmarkDirectServer(b *testing.B) {
+	server, err := tempredis.Start(tempredis.Config{"port": "16000"})
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer server.Term()
+	conn, err := redis.Dial("tcp", "0.0.0.0:16000")
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		conn.Do("PING")
+	}
+}
+
+func BenchmarkProxyServer(b *testing.B) {
+	withProxyAndServers(1, func(proxy *ProxyServer, servers []*tempredis.Server) {
+		serverConfig := servers[0].Config
+
+		conn := dialProxy(proxy)
+		_, err := conn.Do("AUTH", "pw")
+		if err != nil {
+			b.Fatal(err)
+		}
+		_, err = conn.Do("PROXY", serverConfig.Bind(), serverConfig.Port(), serverConfig.Password())
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			conn.Do("PING")
+		}
+
+		b.StopTimer()
+	})
+}
