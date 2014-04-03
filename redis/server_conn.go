@@ -1,4 +1,4 @@
-package main
+package redis
 
 import (
 	"github.com/stvp/resp"
@@ -38,6 +38,21 @@ func (s *ServerConn) Do(command resp.Command) (response resp.Object, err error) 
 	}
 
 	return s.do(command)
+}
+
+func (s *ServerConn) Send(command resp.Command) (err error) {
+	s.Lock()
+	defer s.Unlock()
+	s.LastUsed = time.Now()
+
+	if s.conn == nil {
+		err = s.dial()
+		if err != nil {
+			return err
+		}
+	}
+
+	return s.write(command)
 }
 
 func (s *ServerConn) dial() (err error) {

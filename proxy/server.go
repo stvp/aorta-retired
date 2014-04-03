@@ -1,7 +1,8 @@
-package main
+package proxy
 
 import (
 	"fmt"
+	"github.com/stvp/aorta/redis"
 	"github.com/stvp/resp"
 	"net"
 	"strconv"
@@ -9,7 +10,7 @@ import (
 	"time"
 )
 
-type ProxyServer struct {
+type Server struct {
 	// Settings
 	password      string
 	clientTimeout time.Duration
@@ -17,21 +18,21 @@ type ProxyServer struct {
 
 	bind     string
 	listener net.Listener
-	pool     *ServerConnPool
+	pool     *redis.ServerConnPool
 	// cache *Cache
 }
 
-func NewProxyServer(bind, password string, clientTimeout, serverTimeout time.Duration) *ProxyServer {
-	return &ProxyServer{
+func NewServer(bind, password string, clientTimeout, serverTimeout time.Duration) *Server {
+	return &Server{
 		password:      password,
 		clientTimeout: clientTimeout,
 		serverTimeout: serverTimeout,
 		bind:          bind,
-		pool:          NewServerConnPool(),
+		pool:          redis.NewServerConnPool(),
 	}
 }
 
-func (s *ProxyServer) Listen() error {
+func (s *Server) Listen() error {
 	listener, err := net.Listen("tcp", s.bind)
 	if err != nil {
 		return err
@@ -53,24 +54,24 @@ func (s *ProxyServer) Listen() error {
 	return nil
 }
 
-func (s *ProxyServer) Close() {
+func (s *Server) Close() {
 	if s.listener != nil {
 		s.listener.Close()
 	}
 }
 
-func (s *ProxyServer) handle(conn net.Conn) {
-	client := NewClientConn(conn, s.clientTimeout)
+func (s *Server) handle(conn net.Conn) {
+	client := redis.NewClientConn(conn, s.clientTimeout)
 	defer client.Close()
 
 	// State
 	var authenticated bool
-	var server *ServerConn
+	var server *redis.ServerConn
 
 	for {
 		// Read command
 		command, err := client.ReadCommand()
-		if err == ErrTimeout || err == ErrConnClosed {
+		if err == redis.ErrTimeout || err == redis.ErrConnClosed {
 			return
 		} else if err == resp.ErrSyntaxError {
 			client.WriteError("ERR syntax error")

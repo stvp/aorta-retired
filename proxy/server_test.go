@@ -1,7 +1,8 @@
-package main
+package proxy
 
 import (
 	"github.com/garyburd/redigo/redis"
+	r "github.com/stvp/aorta/redis"
 	"github.com/stvp/resp"
 	"github.com/stvp/tempredis"
 	"io"
@@ -13,8 +14,8 @@ import (
 
 // -- Helpers
 
-func startProxyAndServers(serverCount int) (*ProxyServer, []*tempredis.Server) {
-	proxy := NewProxyServer("0.0.0.0:12001", "pw", 10*time.Millisecond, 10*time.Millisecond)
+func startProxyAndServers(serverCount int) (*Server, []*tempredis.Server) {
+	proxy := NewServer("0.0.0.0:12001", "pw", 10*time.Millisecond, 10*time.Millisecond)
 	err := proxy.Listen()
 	if err != nil {
 		panic(err)
@@ -33,8 +34,8 @@ func startProxyAndServers(serverCount int) (*ProxyServer, []*tempredis.Server) {
 	return proxy, servers
 }
 
-func withProxy(fn func(*ProxyServer)) {
-	proxy := NewProxyServer("0.0.0.0:12001", "pw", 10*time.Millisecond, 10*time.Millisecond)
+func withProxy(fn func(*Server)) {
+	proxy := NewServer("0.0.0.0:12001", "pw", 10*time.Millisecond, 10*time.Millisecond)
 	defer proxy.Close()
 	err := proxy.Listen()
 	if err != nil {
@@ -43,7 +44,7 @@ func withProxy(fn func(*ProxyServer)) {
 	fn(proxy)
 }
 
-func withProxyAndServers(serverCount int, fn func(*ProxyServer, []*tempredis.Server)) {
+func withProxyAndServers(serverCount int, fn func(*Server, []*tempredis.Server)) {
 	proxy, servers := startProxyAndServers(serverCount)
 	defer proxy.Close()
 	defer func() {
@@ -54,7 +55,7 @@ func withProxyAndServers(serverCount int, fn func(*ProxyServer, []*tempredis.Ser
 	fn(proxy, servers)
 }
 
-func dialProxy(proxy *ProxyServer) redis.Conn {
+func dialProxy(proxy *Server) redis.Conn {
 	timeout := 50 * time.Millisecond
 	redis, err := redis.DialTimeout("tcp", proxy.bind, timeout, timeout, timeout)
 	if err != nil {
@@ -64,9 +65,8 @@ func dialProxy(proxy *ProxyServer) redis.Conn {
 }
 
 func blockServer(server *tempredis.Server) {
-	conn := NewServerConn(server.Config.Address(), server.Config.Password(), time.Minute)
-	conn.dial()
-	conn.write(resp.NewCommand("DEBUG", "SLEEP", "60"))
+	conn := r.NewServerConn(server.Config.Address(), server.Config.Password(), time.Minute)
+	conn.Send(resp.NewCommand("DEBUG", "SLEEP", "60"))
 }
 
 func connClosed(conn net.Conn) bool {
@@ -84,7 +84,7 @@ func redisConnClosed(conn redis.Conn) bool {
 // -- Tests
 
 func TestProxyServer_Auth(t *testing.T) {
-	withProxy(func(proxy *ProxyServer) {
+	withProxy(func(proxy *Server) {
 		// No auth
 		conn := dialProxy(proxy)
 		_, err := conn.Do("PROXY", "localhost", "9999", "x")
@@ -121,7 +121,7 @@ func TestProxyServer_Auth(t *testing.T) {
 }
 
 func TestProxyServer_BadProxy(t *testing.T) {
-	withProxy(func(proxy *ProxyServer) {
+	withProxy(func(proxy *Server) {
 		// No proxy command
 		conn := dialProxy(proxy)
 		conn.Do("AUTH", "pw")
@@ -172,7 +172,7 @@ func TestProxyServer_BadProxy(t *testing.T) {
 }
 
 func TestProxyServer_GoodProxy(t *testing.T) {
-	withProxyAndServers(1, func(proxy *ProxyServer, servers []*tempredis.Server) {
+	withProxyAndServers(1, func(proxy *Server, servers []*tempredis.Server) {
 		serverConfig := servers[0].Config
 
 		// Good proxy command
@@ -204,7 +204,7 @@ func TestProxyServer_GoodProxy(t *testing.T) {
 }
 
 func TestProxyServer_ProxyToBlockedServer(t *testing.T) {
-	withProxyAndServers(1, func(proxy *ProxyServer, servers []*tempredis.Server) {
+	withProxyAndServers(1, func(proxy *Server, servers []*tempredis.Server) {
 		server := servers[0]
 		conn := dialProxy(proxy)
 		conn.Do("AUTH", "pw")
@@ -218,7 +218,7 @@ func TestProxyServer_ProxyToBlockedServer(t *testing.T) {
 }
 
 func TestProxyServer_ClientQuit(t *testing.T) {
-	withProxy(func(proxy *ProxyServer) {
+	withProxy(func(proxy *Server) {
 		conn := dialProxy(proxy)
 		conn.Do("AUTH", "pw")
 		conn.Do("QUIT")
@@ -229,7 +229,7 @@ func TestProxyServer_ClientQuit(t *testing.T) {
 }
 
 func TestProxyServer_SwitchServer(t *testing.T) {
-	withProxyAndServers(2, func(proxy *ProxyServer, servers []*tempredis.Server) {
+	withProxyAndServers(2, func(proxy *Server, servers []*tempredis.Server) {
 		conn := dialProxy(proxy)
 		conn.Do("AUTH", "pw")
 		conn.Do("PROXY", servers[0].Config.Bind(), servers[0].Config.Port(), servers[0].Config.Password())
@@ -280,7 +280,7 @@ func BenchmarkDirectServer(b *testing.B) {
 }
 
 func BenchmarkProxyServer(b *testing.B) {
-	withProxyAndServers(1, func(proxy *ProxyServer, servers []*tempredis.Server) {
+	withProxyAndServers(1, func(proxy *Server, servers []*tempredis.Server) {
 		serverConfig := servers[0].Config
 
 		conn := dialProxy(proxy)
