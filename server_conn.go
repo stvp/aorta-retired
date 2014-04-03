@@ -8,16 +8,18 @@ import (
 )
 
 type ServerConn struct {
-	host string
-	auth string
+	LastUsed time.Time
+	host     string
+	auth     string
 	RESPConn
 }
 
 // TODO just take an address
 func NewServerConn(host, port, auth string, timeout time.Duration) *ServerConn {
 	server := &ServerConn{
-		host: fmt.Sprintf("%s:%s", host, port),
-		auth: auth,
+		LastUsed: time.Now(),
+		host:     fmt.Sprintf("%s:%s", host, port),
+		auth:     auth,
 		RESPConn: RESPConn{
 			timeout: timeout,
 		},
@@ -28,6 +30,7 @@ func NewServerConn(host, port, auth string, timeout time.Duration) *ServerConn {
 func (s *ServerConn) Do(command resp.Command) (response resp.Object, err error) {
 	s.Lock()
 	defer s.Unlock()
+	s.LastUsed = time.Now()
 
 	if s.conn == nil {
 		err = s.dial()

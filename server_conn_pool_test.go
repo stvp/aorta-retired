@@ -27,6 +27,29 @@ func TestServerConnPool(t *testing.T) {
 	}
 }
 
+func TestServerConnPoolExpire(t *testing.T) {
+	now := time.Now()
+	pool := NewServerConnPool()
+	pool.Get("foo1", "6379", "baz", time.Second)
+	pool.Get("foo2", "6379", "baz", time.Second)
+	pool.Get("foo3", "6379", "baz", time.Second)
+	pool.pool["foo1:6379:baz"].LastUsed = now
+	pool.pool["foo2:6379:baz"].LastUsed = now.Add(-time.Minute)
+	pool.pool["foo3:6379:baz"].LastUsed = now.Add(-time.Hour)
+	if expired := pool.Expire(now.Add(-time.Minute)); expired != 1 {
+		t.Errorf("expected to expire 1 connection, expired %d", expired)
+	}
+	if _, ok := pool.pool["foo1:6379:baz"]; !ok {
+		t.Error("shouldn't have expired foo1")
+	}
+	if _, ok := pool.pool["foo2:6379:baz"]; !ok {
+		t.Error("shouldn't have expired foo2")
+	}
+	if _, ok := pool.pool["foo3:6379:baz"]; ok {
+		t.Error("should have expired foo3")
+	}
+}
+
 func BenchmarkServerConnPool_1(b *testing.B) {
 	pool := NewServerConnPool()
 	for i := 0; i < b.N; i++ {

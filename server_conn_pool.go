@@ -36,6 +36,20 @@ func (p *ServerConnPool) Get(host, port, auth string, timeout time.Duration) *Se
 	return serverConn
 }
 
+func (p *ServerConnPool) Expire(limit time.Time) int {
+	expired := 0
+	for key, conn := range p.pool {
+		if conn.LastUsed.Before(limit) {
+			p.lock(key)
+			delete(p.pool, key)
+			delete(p.mutexes, key)
+			conn.Close()
+			expired++
+		}
+	}
+	return expired
+}
+
 func (p *ServerConnPool) lock(key string) {
 	p.mutexesMutex.Lock()
 	mutex := p.mutexes[key]
