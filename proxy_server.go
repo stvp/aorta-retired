@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/stvp/resp"
 	"net"
 	"strconv"
@@ -118,7 +119,8 @@ func (s *ProxyServer) handle(conn net.Conn) {
 				client.WriteError("ERR wrong number of arguments for 'proxy' command")
 				continue
 			}
-			server = s.pool.Get(args[1], args[2], args[3], s.serverTimeout)
+			address := fmt.Sprintf("%s:%s", args[1], args[2])
+			server = s.pool.Get(address, args[3], s.serverTimeout)
 			client.Write(resp.OK)
 			continue
 		}

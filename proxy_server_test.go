@@ -64,7 +64,7 @@ func dialProxy(proxy *ProxyServer) redis.Conn {
 }
 
 func blockServer(server *tempredis.Server) {
-	conn := NewServerConn(server.Config.Bind(), server.Config.Port(), server.Config.Password(), time.Minute)
+	conn := NewServerConn(server.Config.Address(), server.Config.Password(), time.Minute)
 	conn.dial()
 	conn.write(resp.NewCommand("DEBUG", "SLEEP", "60"))
 }

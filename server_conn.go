@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"github.com/stvp/resp"
 	"net"
 	"time"
@@ -9,16 +8,15 @@ import (
 
 type ServerConn struct {
 	LastUsed time.Time
-	host     string
+	address  string
 	auth     string
 	RESPConn
 }
 
-// TODO just take an address
-func NewServerConn(host, port, auth string, timeout time.Duration) *ServerConn {
+func NewServerConn(address, auth string, timeout time.Duration) *ServerConn {
 	server := &ServerConn{
 		LastUsed: time.Now(),
-		host:     fmt.Sprintf("%s:%s", host, port),
+		address:  address,
 		auth:     auth,
 		RESPConn: RESPConn{
 			timeout: timeout,
@@ -45,7 +43,7 @@ func (s *ServerConn) Do(command resp.Command) (response resp.Object, err error) 
 func (s *ServerConn) dial() (err error) {
 	s.close()
 
-	conn, err := net.DialTimeout("tcp", s.host, s.timeout)
+	conn, err := net.DialTimeout("tcp", s.address, s.timeout)
 	if err != nil {
 		return wrapErr(err)
 	}

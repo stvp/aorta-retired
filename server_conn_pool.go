@@ -20,8 +20,8 @@ func NewServerConnPool() *ServerConnPool {
 	}
 }
 
-func (p *ServerConnPool) Get(host, port, auth string, timeout time.Duration) *ServerConn {
-	key := poolKey(host, port, auth)
+func (p *ServerConnPool) Get(address, auth string, timeout time.Duration) *ServerConn {
+	key := poolKey(address, auth)
 
 	// Ensure we don't create conflicting server connections
 	p.lock(key)
@@ -29,7 +29,7 @@ func (p *ServerConnPool) Get(host, port, auth string, timeout time.Duration) *Se
 
 	serverConn := p.pool[key]
 	if serverConn == nil {
-		serverConn = NewServerConn(host, port, auth, timeout)
+		serverConn = NewServerConn(address, auth, timeout)
 		p.pool[key] = serverConn
 	}
 
@@ -66,6 +66,6 @@ func (p *ServerConnPool) unlock(key string) {
 	mutex.Unlock()
 }
 
-func poolKey(host, port, auth string) string {
-	return fmt.Sprintf("%s:%s:%s", host, port, auth)
+func poolKey(address, auth string) string {
+	return fmt.Sprintf("%s:%s", address, auth)
 }
