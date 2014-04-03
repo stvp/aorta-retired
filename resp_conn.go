@@ -31,7 +31,7 @@ func (c *RESPConn) write(raw []byte) error {
 		return ErrConnClosed
 	}
 
-	c.conn.SetDeadline(time.Now().Add(c.timeout))
+	c.conn.SetWriteDeadline(time.Now().Add(c.timeout))
 	_, err := c.conn.Write(raw)
 	err = wrapErr(err)
 	if err == ErrConnClosed {
@@ -41,18 +41,18 @@ func (c *RESPConn) write(raw []byte) error {
 	return err
 }
 
-func (c *RESPConn) readObject() (response interface{}, err error) {
+func (c *RESPConn) readObject() (obj resp.Object, err error) {
 	if c.conn == nil {
 		return nil, ErrConnClosed
 	}
 
-	c.conn.SetDeadline(time.Now().Add(c.timeout))
-	response, err = c.reader.ReadObject()
+	c.conn.SetReadDeadline(time.Now().Add(c.timeout))
+	obj, err = c.reader.ReadObject()
 	err = wrapErr(err)
 	if err == ErrConnClosed {
 		c.close()
 	}
-	return response, err
+	return obj, err
 }
 
 func (c *RESPConn) close() (err error) {

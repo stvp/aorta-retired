@@ -84,7 +84,11 @@ func (s *ProxyServer) handle(conn net.Conn) {
 		}
 		commandName := strings.ToUpper(args[0])
 
-		// Handle authentication
+		if commandName == "QUIT" {
+			return
+		}
+
+		// Require authentication
 		if commandName == "AUTH" {
 			if len(args) != 2 {
 				client.WriteError("ERR wrong number of arguments for 'auth' command")
@@ -104,13 +108,14 @@ func (s *ProxyServer) handle(conn net.Conn) {
 			return
 		}
 
-		// Handle server destination
+		// Require destination server
 		if commandName == "PROXY" {
+			server = nil
 			if len(args) != 4 {
 				client.WriteError("ERR wrong number of arguments for 'proxy' command")
 				continue
 			}
-			server = s.pool.Get(args[1], args[2], args[3])
+			server = s.pool.Get(args[1], args[2], args[3], s.serverTimeout)
 			client.Write(resp.OK)
 			continue
 		}
@@ -133,8 +138,6 @@ func (s *ProxyServer) handle(conn net.Conn) {
 			}
 			panic(secs)
 			// TODO cached get
-		case "QUIT":
-			return
 		default:
 			response, err := server.Do(command)
 			if err != nil {
@@ -147,7 +150,7 @@ func (s *ProxyServer) handle(conn net.Conn) {
 				continue
 			}
 
-			err = client.Write(response.([]byte))
+			err = client.Write(response.Raw())
 			if err != nil {
 				return
 			}

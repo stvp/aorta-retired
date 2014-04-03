@@ -20,7 +20,7 @@ func NewServerConnPool() *ServerConnPool {
 	}
 }
 
-func (p *ServerConnPool) Get(host, port, auth string) *ServerConn {
+func (p *ServerConnPool) Get(host, port, auth string, timeout time.Duration) *ServerConn {
 	key := poolKey(host, port, auth)
 
 	// Ensure we don't create conflicting server connections
@@ -29,8 +29,7 @@ func (p *ServerConnPool) Get(host, port, auth string) *ServerConn {
 
 	serverConn := p.pool[key]
 	if serverConn == nil {
-		// TODO use configurable timeout
-		serverConn = NewServerConn(host, port, auth, 2*time.Second)
+		serverConn = NewServerConn(host, port, auth, timeout)
 		p.pool[key] = serverConn
 	}
 

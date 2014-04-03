@@ -25,7 +25,7 @@ func NewServerConn(host, port, auth string, timeout time.Duration) *ServerConn {
 	return server
 }
 
-func (s *ServerConn) Do(command resp.Command) (response interface{}, err error) {
+func (s *ServerConn) Do(command resp.Command) (response resp.Object, err error) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -60,7 +60,7 @@ func (s *ServerConn) dial() (err error) {
 	return nil
 }
 
-func (s *ServerConn) do(command resp.Command) (response interface{}, err error) {
+func (s *ServerConn) do(command resp.Command) (response resp.Object, err error) {
 	err = s.write(command)
 	if err != nil {
 		return nil, err
