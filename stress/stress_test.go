@@ -10,8 +10,6 @@ import (
 	"time"
 )
 
-// -- Helpers
-
 func TestStress(t *testing.T) {
 	serverCount := 4
 	goroutineCount := 4
