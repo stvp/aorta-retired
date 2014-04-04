@@ -1,7 +1,9 @@
 package proxy
 
 import (
+	"bytes"
 	"fmt"
+	"github.com/stvp/aorta/cache"
 	"github.com/stvp/aorta/redis"
 	"github.com/stvp/resp"
 	"net"
@@ -19,7 +21,7 @@ type Server struct {
 	bind     string
 	listener net.Listener
 	pool     *redis.ServerConnPool
-	// cache *Cache
+	cache    *cache.Cache
 }
 
 func NewServer(bind, password string, clientTimeout, serverTimeout time.Duration) *Server {
@@ -29,6 +31,7 @@ func NewServer(bind, password string, clientTimeout, serverTimeout time.Duration
 		serverTimeout: serverTimeout,
 		bind:          bind,
 		pool:          redis.NewServerConnPool(),
+		cache:         cache.NewCache(),
 	}
 }
 
@@ -131,9 +134,9 @@ func (s *Server) handle(conn net.Conn) {
 			continue
 		}
 
-		// Handle the command
-		switch commandName {
-		case "CACHED":
+		// Handle CACHED command prefix
+		var maxAge time.Time
+		if commandName == "CACHED" {
 			if len(args) < 3 {
 				client.WriteError("ERR wrong number of arguments for 'cached' command")
 				return
@@ -142,19 +145,42 @@ func (s *Server) handle(conn net.Conn) {
 			if err != nil {
 				client.WriteError("ERR syntax error")
 			}
-			panic(secs)
-			// TODO cached get
-		default:
-			response, err := server.Do(command)
-			if err != nil {
-				client.WriteError(err.Error())
-				continue
-			}
+			maxAge = time.Now().Add(-time.Duration(secs) * time.Second)
+			command = resp.NewCommand((args[2:])...)
+		} else {
+			maxAge = time.Now()
+		}
 
-			err = client.Write(response.Raw())
-			if err != nil {
-				return
-			}
+		// Handle the command
+		response, err := s.cachedDo(maxAge, command, server)
+		if err != nil {
+			client.WriteError(err.Error())
+			continue
+		}
+
+		err = client.Write(response.Raw())
+		if err != nil {
+			return
 		}
 	}
 }
+
+func (s *Server) cachedDo(maxAge time.Time, command resp.Command, conn *redis.ServerConn) (resp.Object, error) {
+	key := s.cacheKey(command, conn)
+	return s.cache.Fetch(key, maxAge, func() (resp.Object, error) {
+		return conn.Do(command)
+	})
+}
+
+func (s *Server) cacheKey(command resp.Command, conn *redis.ServerConn) string {
+	var buf bytes.Buffer
+	buf.WriteString(conn.Address())
+	buf.WriteString(conn.Password())
+	args, _ := command.Slices()
+	for _, arg := range args {
+		buf.Write(arg)
+	}
+	return buf.String()
+}
+
+// key = host port password command

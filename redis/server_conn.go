@@ -9,15 +9,15 @@ import (
 type ServerConn struct {
 	LastUsed time.Time
 	address  string
-	auth     string
+	password string
 	RESPConn
 }
 
-func NewServerConn(address, auth string, timeout time.Duration) *ServerConn {
+func NewServerConn(address, password string, timeout time.Duration) *ServerConn {
 	server := &ServerConn{
 		LastUsed: time.Now(),
 		address:  address,
-		auth:     auth,
+		password: password,
 		RESPConn: RESPConn{
 			timeout: timeout,
 		},
@@ -55,6 +55,14 @@ func (s *ServerConn) Send(command resp.Command) (err error) {
 	return s.write(command)
 }
 
+func (s *ServerConn) Address() string {
+	return s.address
+}
+
+func (s *ServerConn) Password() string {
+	return s.password
+}
+
 func (s *ServerConn) dial() (err error) {
 	s.close()
 
@@ -65,8 +73,8 @@ func (s *ServerConn) dial() (err error) {
 
 	s.conn = conn
 	s.reader = resp.NewReaderSize(s.conn, 8192)
-	if len(s.auth) > 0 {
-		_, err = s.do(resp.NewCommand("AUTH", s.auth))
+	if len(s.password) > 0 {
+		_, err = s.do(resp.NewCommand("AUTH", s.password))
 		if err != nil {
 			s.close()
 			return err
