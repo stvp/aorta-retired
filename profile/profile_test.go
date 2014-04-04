@@ -48,7 +48,7 @@ func TestProfile(t *testing.T) {
 		t.Fatal(t)
 	}
 	pprof.StartCPUProfile(f)
-	for i := 0; i < 10000; i++ {
+	for i := 0; i < 25000; i++ {
 		_, err = client.Do("PING")
 		if err != nil {
 			t.Fatal(err)
