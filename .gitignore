@@ -1,2 +1,3 @@
-aorta.test
 aorta
+*.test
+*.prof
