@@ -5,22 +5,22 @@ import (
 	"time"
 )
 
-type CacheFill func() (string, error)
+type CacheFill func() ([]byte, error)
 
-type TimeString struct {
-	String string
-	Time   time.Time
+type TimeBytes struct {
+	Bytes []byte
+	Time  time.Time
 }
 
 type Cache struct {
-	values  map[string]TimeString
+	values  map[string]TimeBytes
 	mutexes map[string]*sync.Mutex
 	sync.Mutex
 }
 
 func NewCache() *Cache {
 	return &Cache{
-		values:  map[string]TimeString{},
+		values:  map[string]TimeBytes{},
 		mutexes: map[string]*sync.Mutex{},
 	}
 }
@@ -42,7 +42,7 @@ func (c *Cache) unlock(key string) {
 	mutex.Unlock()
 }
 
-func (c *Cache) Fetch(key string, maxAge time.Duration, fill CacheFill) (string, error) {
+func (c *Cache) Fetch(key string, maxAge time.Duration, fill CacheFill) ([]byte, error) {
 	c.lock(key)
 	defer c.unlock(key)
 
@@ -50,23 +50,23 @@ func (c *Cache) Fetch(key string, maxAge time.Duration, fill CacheFill) (string,
 
 	value, ok := c.values[key]
 	if ok && now.Sub(value.Time) < maxAge {
-		return value.String, nil
+		return value.Bytes, nil
 	}
 
-	str, err := fill()
+	b, err := fill()
 	if err != nil {
-		return "", err
+		return b, err
 	}
 
-	c.values[key] = TimeString{
-		String: str,
-		Time:   now,
+	c.values[key] = TimeBytes{
+		Bytes: b,
+		Time:  now,
 	}
 
-	return str, nil
+	return b, nil
 }
 
-func (c *Cache) Clear(key string) {
+func (c *Cache) clear(key string) {
 	c.lock(key)
 	delete(c.values, key)
 	delete(c.mutexes, key)
