@@ -7,16 +7,16 @@ import (
 	"time"
 )
 
-// A Cache is a simple cache for byte slices with string keys. The primary goal
-// is to ensure that the cache fill function for a given key is never called
-// more often than needed. If you continually call Fetch() with a max age of 1
-// second ago, the cache fill function will never be called more than once a
-// second regardless of whether the cache fill function is fast or slow for a
-// given key. If a cache fill for a key is slow, Fetch() calls for that key
-// will block until the cache is filled.
+// A Cache is a simple cache for RESP objects with string keys. The primary
+// goal is to ensure that the cache fill function for a given key is never
+// called more often than needed. If you continually call Fetch() with a max
+// age of 1 second ago, the cache fill function will never be called more than
+// once a second regardless of whether the cache fill function is fast or slow
+// for a given key. If a cache fill for a key is slow, simultaneous Fetch()
+// calls for that key will block until the cache is filled.
 //
-// Cache is designed to hold at most millions of keys. Memory efficiency is not
-// a design goal, but the overhead for a million keys shouldn't be more than
+// Cache is designed to hold up to multiple millions of keys. Memory efficiency
+// is not a goal, but the overhead for a million keys shouldn't be more than
 // 16-32 megabytes.
 type Cache struct {
 	l            list.List
