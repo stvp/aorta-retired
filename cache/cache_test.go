@@ -2,6 +2,7 @@ package cache
 
 import (
 	"fmt"
+	"github.com/stvp/resp"
 	"sync"
 	"testing"
 	"time"
@@ -14,56 +15,56 @@ func TestCacheFetch(t *testing.T) {
 	cache := NewCache()
 
 	// Fetch an un-cached value
-	result, err := cache.Fetch("mykey", secondAgo, func() ([]byte, error) {
-		return []byte("cool"), nil
+	obj, err := cache.Fetch("mykey", secondAgo, func() (resp.Object, error) {
+		return resp.NewBulkString("cool"), nil
 	})
 	if err != nil {
 		t.Error(err)
 	}
-	if string(result) != "cool" {
-		t.Errorf("Fetch() returned the wrong value: %#v", result)
+	if obj.(resp.String).String() != "cool" {
+		t.Errorf("Fetch() returned the wrong object: %#v", obj)
 	}
 
 	// Fetch a cached value
-	result, err = cache.Fetch("mykey", secondAgo, func() ([]byte, error) {
-		t.Error("Fetch called the CacheFill function when the key was already cached")
-		return []byte("nope"), nil
+	obj, err = cache.Fetch("mykey", secondAgo, func() (resp.Object, error) {
+		t.Error("Fetch called the fill function when the key was already cached")
+		return resp.NewBulkString("nope"), nil
 	})
 	if err != nil {
 		t.Error(err)
 	}
-	if string(result) != "cool" {
-		t.Errorf("Fetch() returned the wrong value: %#v", result)
+	if obj.(resp.String).String() != "cool" {
+		t.Errorf("Fetch() returned the wrong object: %#v", obj)
 	}
 
 	// Fetch a cached but stale value
-	result, err = cache.Fetch("mykey", time.Now(), func() ([]byte, error) {
-		return []byte("even cooler"), nil
+	obj, err = cache.Fetch("mykey", time.Now(), func() (resp.Object, error) {
+		return resp.NewBulkString("even cooler"), nil
 	})
 	if err != nil {
 		t.Error(err)
 	}
-	if string(result) != "even cooler" {
-		t.Errorf("Fetch() returned the wrong value: %#v", result)
+	if obj.(resp.String).String() != "even cooler" {
+		t.Errorf("Fetch() returned the wrong object: %#v", obj)
 	}
 
 	// Fetch when the CacheFill returns an error
-	result, err = cache.Fetch("uncachedkey", now, func() ([]byte, error) {
+	obj, err = cache.Fetch("uncachedkey", now, func() (resp.Object, error) {
 		return nil, fmt.Errorf("oh no")
 	})
 	if err == nil {
-		t.Error("Fetch() with a failed CacheFill should return an error, but it didn't")
+		t.Error("Fetch() with a failed fill should return an error, but it didn't")
 	}
 
 	// Fetch after a failure runs the given function to fill cache
-	result, err = cache.Fetch("uncachedkey", secondAgo, func() ([]byte, error) {
-		return []byte("normal"), nil
+	obj, err = cache.Fetch("uncachedkey", secondAgo, func() (resp.Object, error) {
+		return resp.NewBulkString("normal"), nil
 	})
 	if err != nil {
 		t.Error(err)
 	}
-	if string(result) != "normal" {
-		t.Errorf("Fetch() returned the wrong value: %#v", result)
+	if obj.(resp.String).String() != "normal" {
+		t.Errorf("Fetch() returned the wrong object: %#v", obj)
 	}
 }
 
@@ -75,18 +76,18 @@ func BenchmarkFetchFillRate(b *testing.B) {
 	start := time.Now()
 	go func() {
 		for i := 0; i < b.N; i++ {
-			cache.Fetch("mykey", time.Now().Add(-time.Millisecond), func() ([]byte, error) {
+			cache.Fetch("mykey", time.Now().Add(-time.Millisecond), func() (resp.Object, error) {
 				fills++
-				return []byte{}, nil
+				return resp.String{}, nil
 			})
 		}
 		wg.Done()
 	}()
 	go func() {
 		for i := 0; i < b.N; i++ {
-			cache.Fetch("mykey", time.Now().Add(-time.Millisecond), func() ([]byte, error) {
+			cache.Fetch("mykey", time.Now().Add(-time.Millisecond), func() (resp.Object, error) {
 				fills++
-				return []byte{}, nil
+				return resp.String{}, nil
 			})
 		}
 		wg.Done()
@@ -109,11 +110,11 @@ func TestExpire(t *testing.T) {
 
 	// a is oldest element
 	for _, letter := range []string{"a", "b", "c", "d", "e", "f"} {
-		cache.Fetch(letter, time.Now(), func() ([]byte, error) { return []byte{}, nil })
+		cache.Fetch(letter, time.Now(), func() (resp.Object, error) { return resp.String{}, nil })
 	}
 	// a, b, and c should get expired
 	for _, letter := range []string{"a", "b", "c"} {
-		v := cache.m[letter].Value.(*cachedValue)
+		v := cache.m[letter].Value.(*cachedObject)
 		v.timestamp = time.Now().Add(-time.Hour)
 	}
 
@@ -144,8 +145,8 @@ func BenchmarkExpire(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		key := fmt.Sprintf("some_key_%d", i)
-		cache.Fetch(key, time.Now(), func() ([]byte, error) {
-			return []byte("some value here"), nil
+		cache.Fetch(key, time.Now(), func() (resp.Object, error) {
+			return resp.NewBulkString("some value here"), nil
 		})
 	}
 

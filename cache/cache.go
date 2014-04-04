@@ -2,6 +2,7 @@ package cache
 
 import (
 	"container/list"
+	"github.com/stvp/resp"
 	"sync"
 	"time"
 )
@@ -24,9 +25,9 @@ type Cache struct {
 	mutexesMutex sync.Mutex
 }
 
-type cachedValue struct {
+type cachedObject struct {
 	key       string
-	bytes     []byte
+	object    resp.Object
 	timestamp time.Time
 }
 
@@ -43,33 +44,33 @@ func NewCache() *Cache {
 // cache fill function will be called to fill the cache. If the cache fill
 // function returns an error, the cache will not be filled and the error will
 // be returned by Fetch.
-func (c *Cache) Fetch(key string, maxAge time.Time, fn func() ([]byte, error)) ([]byte, error) {
+func (c *Cache) Fetch(key string, maxAge time.Time, fn func() (resp.Object, error)) (resp.Object, error) {
 	c.lockKey(key)
 	defer c.unlockKey(key)
 
 	// Try to use cached value
 	element, ok := c.m[key]
 	if ok {
-		value := element.Value.(*cachedValue)
-		if value.timestamp.After(maxAge) {
-			return value.bytes, nil
+		obj := element.Value.(*cachedObject)
+		if obj.timestamp.After(maxAge) {
+			return obj.object, nil
 		}
 	}
 
 	// Cache is empty or stale, fill it up
-	bytes, err := fn()
+	object, err := fn()
 	if err != nil {
-		return bytes, err
+		return object, err
 	}
 
-	value := &cachedValue{
+	value := &cachedObject{
 		key:       key,
-		bytes:     bytes,
+		object:    object,
 		timestamp: time.Now(),
 	}
 	c.m[key] = c.l.PushFront(value)
 
-	return bytes, nil
+	return object, nil
 }
 
 // Expire is an exact expiration loop that expires all keys (up to a given
@@ -78,12 +79,12 @@ func (c *Cache) Fetch(key string, maxAge time.Time, fn func() ([]byte, error)) (
 // It's moderately fast: on a MacBook Pro, it expires ~2,000 items per
 // millisecond.
 func (c *Cache) Expire(maxCount int, maxAge time.Time) (expired int) {
-	var v *cachedValue
+	var v *cachedObject
 	var cursor, prev *list.Element
 	cursor = c.l.Back()
 
 	for cursor != nil {
-		v = cursor.Value.(*cachedValue)
+		v = cursor.Value.(*cachedObject)
 		if v.timestamp.After(maxAge) {
 			break
 		}
@@ -100,7 +101,7 @@ func (c *Cache) Expire(maxCount int, maxAge time.Time) (expired int) {
 }
 
 func (c *Cache) remove(e *list.Element) {
-	value := e.Value.(*cachedValue)
+	value := e.Value.(*cachedObject)
 	c.lockKey(value.key)
 	c.l.Remove(e)
 	delete(c.m, value.key)
