@@ -19,6 +19,9 @@ import (
 // is not a goal, but the overhead for a million keys shouldn't be more than
 // 16-32 megabytes.
 type Cache struct {
+	Hits   int
+	Misses int
+
 	l            list.List
 	m            map[string]*list.Element
 	mutexes      map[string]*sync.Mutex
@@ -53,9 +56,12 @@ func (c *Cache) Fetch(key string, maxAge time.Time, fn func() (resp.Object, erro
 	if ok {
 		obj := element.Value.(*cachedObject)
 		if obj.timestamp.After(maxAge) {
+			c.Hits++
 			return obj.object, nil
 		}
 	}
+
+	c.Misses++
 
 	// Cache is empty or stale, fill it up
 	object, err := fn()
@@ -98,6 +104,11 @@ func (c *Cache) Expire(maxCount int, maxAge time.Time) (expired int) {
 	}
 
 	return expired
+}
+
+// Len returns the number of keys in the cache.
+func (c *Cache) Len() (count int) {
+	return len(c.m)
 }
 
 func (c *Cache) remove(e *list.Element) {

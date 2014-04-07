@@ -12,8 +12,8 @@ func TestServerConnPool(t *testing.T) {
 	if serverConn.address != "cool.com:1234" {
 		t.Errorf("incorrect address for ServerConn: %s", serverConn.address)
 	}
-	if serverConn.auth != "pw" {
-		t.Errorf("incorrect auth for ServerConn: %s", serverConn.auth)
+	if serverConn.password != "pw" {
+		t.Errorf("incorrect password for ServerConn: %s", serverConn.password)
 	}
 
 	serverConn2 := pool.Get("cool.com:1234", "pw", time.Millisecond)
@@ -23,7 +23,7 @@ func TestServerConnPool(t *testing.T) {
 
 	serverConn3 := pool.Get("cool.com:1234", "other", time.Millisecond)
 	if serverConn3 == serverConn {
-		t.Errorf("different auth should return different ServerConn, but didn't")
+		t.Errorf("different password should return different ServerConn, but didn't")
 	}
 }
 

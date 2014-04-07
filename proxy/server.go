@@ -20,8 +20,12 @@ type Server struct {
 
 	bind     string
 	listener net.Listener
-	pool     *redis.ServerConnPool
-	cache    *cache.Cache
+	Pool     *redis.ServerConnPool
+	Cache    *cache.Cache
+
+	// Stats
+	TotalClientConns   int
+	CurrentClientConns int
 }
 
 func NewServer(bind, password string, clientTimeout, serverTimeout time.Duration) *Server {
@@ -30,8 +34,8 @@ func NewServer(bind, password string, clientTimeout, serverTimeout time.Duration
 		clientTimeout: clientTimeout,
 		serverTimeout: serverTimeout,
 		bind:          bind,
-		pool:          redis.NewServerConnPool(),
-		cache:         cache.NewCache(),
+		Pool:          redis.NewServerConnPool(),
+		Cache:         cache.NewCache(),
 	}
 }
 
@@ -66,6 +70,12 @@ func (s *Server) Close() {
 func (s *Server) handle(conn net.Conn) {
 	client := redis.NewClientConn(conn, s.clientTimeout)
 	defer client.Close()
+
+	s.TotalClientConns++
+	s.CurrentClientConns++
+	defer func() {
+		s.CurrentClientConns--
+	}()
 
 	// State
 	var authenticated bool
@@ -124,7 +134,7 @@ func (s *Server) handle(conn net.Conn) {
 				continue
 			}
 			address := fmt.Sprintf("%s:%s", args[1], args[2])
-			server = s.pool.Get(address, args[3], s.serverTimeout)
+			server = s.Pool.Get(address, args[3], s.serverTimeout)
 			client.Write(resp.OK)
 			continue
 		}
@@ -167,7 +177,7 @@ func (s *Server) handle(conn net.Conn) {
 
 func (s *Server) cachedDo(maxAge time.Time, command resp.Command, conn *redis.ServerConn) (resp.Object, error) {
 	key := s.cacheKey(command, conn)
-	return s.cache.Fetch(key, maxAge, func() (resp.Object, error) {
+	return s.Cache.Fetch(key, maxAge, func() (resp.Object, error) {
 		return conn.Do(command)
 	})
 }
@@ -182,5 +192,3 @@ func (s *Server) cacheKey(command resp.Command, conn *redis.ServerConn) string {
 	}
 	return buf.String()
 }
-
-// key = host port password command

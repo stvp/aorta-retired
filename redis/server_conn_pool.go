@@ -50,6 +50,10 @@ func (p *ServerConnPool) Expire(limit time.Time) int {
 	return expired
 }
 
+func (p *ServerConnPool) Len() int {
+	return len(p.pool)
+}
+
 func (p *ServerConnPool) lock(key string) {
 	p.mutexesMutex.Lock()
 	mutex := p.mutexes[key]
