@@ -4,6 +4,7 @@ import (
 	"flag"
 	"github.com/stvp/aorta/proxy"
 	"github.com/stvp/stvp/log"
+	. "github.com/stvp/stvp/log/helpers"
 	"time"
 )
 
@@ -23,8 +24,24 @@ var (
 	debug           = flag.Bool("debug", false, "log extra debugging info")
 )
 
-func main() {
+func init() {
 	flag.Parse()
+
+	log.Tag = "aorta"
+	log.Env = *env
+	log.PagerdutyServiceKey = *pagerdutyKey
+	log.RollbarToken = *rollbarToken
+	log.LogentriesToken = *logentriesToken
+
+	if *debug {
+		log.StdoutLevel = log.DEBUG
+		log.LogentriesLevel = log.DEBUG
+	}
+}
+
+func main() {
+	// Trigger PagerDuty if we panic
+	defer log.LogPanic(log.CRIT)
 
 	ctimeout := time.Duration(*clientttl) * time.Second
 	stimeout := time.Duration(*serverttl) * time.Second
@@ -41,40 +58,20 @@ func main() {
 }
 
 func runLogger(server *proxy.Server) {
-	log.Tag = "aorta"
-	log.Env = *env
-	log.PagerdutyServiceKey = *pagerdutyKey
-	log.RollbarToken = *rollbarToken
-	log.LogentriesToken = *logentriesToken
-
-	if *debug {
-		log.StdoutLevel = log.DEBUG
-		log.LogentriesLevel = log.DEBUG
-	}
-
-	log.Info("")
-	log.Info("              _.---._    /\\\\")
-	log.Info("           ./'       \"--`\\//     Aorta " + VERSION)
-	log.Info("         ./              o \\")
-	log.Info("        /./\\  )______   \\__ \\    Listening: " + *bind)
-	log.Info("       ./  / /\\ \\   | \\ \\  \\ \\")
-	log.Info("          / /  \\ \\  | |\\ \\  \\7")
-	log.Info("           \"     \"    \"  \"")
-	log.Info("")
+	INFO("")
+	INFO("              _.---._    /\\\\")
+	INFO("           ./'       \"--`\\//     Aorta %s", VERSION)
+	INFO("         ./              o \\")
+	INFO("        /./\\  )______   \\__ \\    Listening: %s", *bind)
+	INFO("       ./  / /\\ \\   | \\ \\  \\ \\   Env: %s", *env)
+	INFO("          / /  \\ \\  | |\\ \\  \\7")
+	INFO("           \"     \"    \"  \"")
+	INFO("")
 
 	interval := time.Duration(*logInterval) * time.Second
 	for now := range time.Tick(interval) {
-		log.Infof("# Stats: %s", now.UTC().Format(time.RFC1123))
-		log.Info("")
-		log.Info("# Connections")
-		log.Infof("current_server_conns:%d", server.Pool.Len())
-		log.Infof("current_client_conns:%d", server.CurrentClientConns)
-		log.Infof("total_client_conns:%d", server.TotalClientConns)
-		log.Info("")
-		log.Info("# Cache")
-		log.Infof("cache_keys:%d", server.Cache.Len())
-		log.Infof("cache_hits:%d", server.Cache.Hits)
-		log.Infof("cache_misses:%d", server.Cache.Misses)
-		log.Info("")
+		INFO("# Stats @ %s", now.UTC().Format(time.RFC1123))
+		INFO("current_server_conns:%d\tcurrent_client_conns:%d\ttotal_client_conns:%d", server.Pool.Len(), server.CurrentClientConns, server.TotalClientConns)
+		INFO("cache_keys:%d\tcache_hits:%d\tcache_misses:%d", server.Cache.Len(), server.Cache.Hits, server.Cache.Misses)
 	}
 }

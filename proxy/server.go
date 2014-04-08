@@ -6,6 +6,7 @@ import (
 	"github.com/stvp/aorta/cache"
 	"github.com/stvp/aorta/redis"
 	"github.com/stvp/resp"
+	. "github.com/stvp/stvp/log/helpers"
 	"net"
 	"strconv"
 	"strings"
@@ -50,10 +51,10 @@ func (s *Server) Listen() error {
 		for {
 			conn, err := listener.Accept()
 			if err != nil {
-				// TODO surface error to logger or something. Also, closing the
-				// listener returns an error here, so we should ignore that.
+				ERROR(err.Error())
 				return
 			}
+			DEBUG("New client: %s", conn.RemoteAddr().String())
 			go s.handle(conn)
 		}
 	}()
@@ -75,6 +76,7 @@ func (s *Server) handle(conn net.Conn) {
 	s.CurrentClientConns++
 	defer func() {
 		s.CurrentClientConns--
+		DEBUG("Closed client: %s", conn.RemoteAddr().String())
 	}()
 
 	// State
